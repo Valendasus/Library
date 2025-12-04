@@ -159,13 +159,11 @@ services:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 networks:
   backend-network:
-    driver: overlay
-    attachable: true
+    external: true
     name: library-backend-net
   
   app-network:
-    driver: overlay
-    attachable: true
+    external: true
     name: library-app-net
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
