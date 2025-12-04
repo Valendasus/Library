@@ -173,10 +173,10 @@ jobs:
             docker swarm init
           fi
           
-          # Create networks only if they don't exist
-          docker network inspect library-backend-net >/dev/null 2>&1 || \
+          # Create networks only if they don't exist (check via ls, not inspect)
+          docker network ls --format '{{.Name}}' | grep -q '^library-backend-net$' || \
             docker network create --driver overlay --attachable library-backend-net
-          docker network inspect library-app-net >/dev/null 2>&1 || \
+          docker network ls --format '{{.Name}}' | grep -q '^library-app-net$' || \
             docker network create --driver overlay --attachable library-app-net
           
           # Deploy stack
