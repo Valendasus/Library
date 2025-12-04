@@ -159,31 +159,77 @@ jobs:
 
       - name: 🛑 Stop existing deployment
         run: |
-          docker stack rm library 2>/dev/null || true
+          # Remove stack if exists
+          if docker stack ls --format '{{.Name}}' | grep -q '^library$'; then
+            echo "Removing existing stack..."
+            docker stack rm library
+            # Wait for all services to be removed
+            while docker stack ps library 2>/dev/null | grep -q .; do
+              echo "Waiting for stack to be removed..."
+              sleep 2
+            done
+            sleep 5
+          fi
+          
+          # Stop compose services if running
           docker compose down 2>/dev/null || true
-          sleep 10
+          
+          # Clean up orphaned containers
+          docker ps -a --filter "name=library" --format '{{.Names}}' | xargs -r docker rm -f 2>/dev/null || true
 
       - name: 🔨 Build images locally
         run: docker compose build --parallel
 
       - name: 🚀 Deploy to Docker Swarm
         run: |
-          # Initialize Swarm if not already
+          set -e  # Exit on any error
+          
+          # Initialize Swarm if not already active
           if ! docker info | grep -q "Swarm: active"; then
+            echo "Initializing Docker Swarm..."
             docker swarm init
+          else
+            echo "Docker Swarm already active"
           fi
           
-          # Create networks only if they don't exist (check via ls, not inspect)
-          docker network ls --format '{{.Name}}' | grep -q '^library-backend-net$' || \
+          # Create networks only if they don't exist
+          echo "Checking networks..."
+          if ! docker network ls --format '{{.Name}}' | grep -q '^library-backend-net$'; then
+            echo "Creating library-backend-net..."
             docker network create --driver overlay --attachable library-backend-net
-          docker network ls --format '{{.Name}}' | grep -q '^library-app-net$' || \
-            docker network create --driver overlay --attachable library-app-net
+          else
+            echo "Network library-backend-net already exists"
+          fi
           
-          # Deploy stack
-          docker stack deploy -c docker-compose.swarm.yml library
+          if ! docker network ls --format '{{.Name}}' | grep -q '^library-app-net$'; then
+            echo "Creating library-app-net..."
+            docker network create --driver overlay --attachable library-app-net
+          else
+            echo "Network library-app-net already exists"
+          fi
+          
+          # Deploy stack with --detach=false to see immediate errors
+          echo "Deploying stack..."
+          docker stack deploy --detach=false -c docker-compose.swarm.yml library
 
       - name: ⏳ Wait for services
-        run: sleep 20
+        run: |
+          echo "Waiting for services to stabilize..."
+          sleep 15
+          
+          # Check if all services are running
+          for i in {1..20}; do
+            READY=$(docker stack services library --format '{{.Replicas}}' | grep -c '/' || true)
+            TOTAL=$(docker stack services library --format '{{.Name}}' | wc -l)
+            echo "Services starting: attempt $i/20 ($READY services found)"
+            
+            if [ "$READY" -eq "$TOTAL" ]; then
+              echo "All services are starting..."
+              sleep 5
+              break
+            fi
+            sleep 3
+          done
 
       - name: 📊 Check deployment status
         run: |
@@ -192,20 +238,43 @@ jobs:
           
           echo ""
           echo "=== Running Tasks ==="
-          docker stack ps library --filter "desired-state=running"
+          docker stack ps library --no-trunc
+          
+          echo ""
+          echo "=== Failed Tasks (if any) ==="
+          docker stack ps library --filter "desired-state=shutdown" --no-trunc || true
 
       - name: ✅ Verify deployment
         run: |
-          # Wait for services to be ready
-          for i in {1..30}; do
+          echo "Verifying deployment health..."
+          
+          # Wait for nginx-lb to be ready (it proxies to backend)
+          for i in {1..40}; do
             if curl -f http://localhost/api/stats 2>/dev/null; then
-              echo "✅ Deployment successful!"
+              echo "✅ Deployment successful! API is responding."
+              
+              # Additional health checks
+              echo ""
+              echo "Running additional checks..."
+              curl -f http://localhost/api/books || echo "⚠️  Books endpoint not ready yet"
+              
               exit 0
             fi
-            echo "Waiting for services... ($i/30)"
-            sleep 2
+            echo "Waiting for services... ($i/40)"
+            sleep 3
           done
-          echo "❌ Deployment verification failed"
+          
+          echo "❌ Deployment verification failed - services not responding"
+          echo ""
+          echo "=== Diagnostic Information ==="
+          docker stack ps library --no-trunc
+          echo ""
+          echo "=== Backend Logs ==="
+          docker service logs library_backend --tail 50 || true
+          echo ""
+          echo "=== Nginx-LB Logs ==="
+          docker service logs library_nginx-lb --tail 50 || true
+          
           exit 1
 
       - name: 📝 Deployment summary
