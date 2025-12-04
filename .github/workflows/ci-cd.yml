@@ -1,0 +1,191 @@
+name: CI/CD - Library Platform
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # 1️⃣  Тестирование Backend
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  test-backend:
+    name: Test Backend API
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: services/backend/package-lock.json
+
+      - name: 📦 Install dependencies
+        working-directory: services/backend
+        run: npm ci
+
+      - name: ✅ Lint code
+        working-directory: services/backend
+        run: npm run lint || echo "No lint script"
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # 2️⃣  Сборка Docker образов
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: test-backend
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔨 Build Backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/backend
+          file: ./services/backend/Dockerfile
+          push: false
+          tags: library-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 🔨 Build Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/frontend
+          file: ./services/frontend/Dockerfile
+          push: false
+          tags: library-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 🔨 Build Nginx LB image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/nginx-lb
+          file: ./services/nginx-lb/Dockerfile
+          push: false
+          tags: library-nginx-lb:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # 3️⃣  Интеграционное тестирование
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🚀 Start services with Docker Compose
+        run: |
+          docker-compose up -d
+          sleep 15
+
+      - name: 🔍 Check services health
+        run: |
+          docker-compose ps
+          
+      - name: 🧪 Test API endpoints
+        run: |
+          # Test health
+          curl -f http://localhost/api/stats || exit 1
+          
+          # Test get books
+          curl -f http://localhost/api/books || exit 1
+          
+          # Test add book
+          curl -f -X POST http://localhost/api/books \
+            -H "Content-Type: application/json" \
+            -d '{"title":"Test Book","author":"CI/CD","year":2025,"category":"Test"}' || exit 1
+          
+          echo "✅ All API tests passed!"
+
+      - name: 🧹 Cleanup
+        if: always()
+        run: docker-compose down -v
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # 4️⃣  Локальный деплой (self-hosted runner)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  deploy-local:
+    name: Deploy to Local Environment
+    runs-on: self-hosted
+    needs: integration-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🛑 Stop existing deployment
+        working-directory: Desktop/cursovaia/library
+        run: |
+          docker stack rm library 2>/dev/null || true
+          docker-compose down 2>/dev/null || true
+          sleep 10
+
+      - name: 🔨 Build images locally
+        working-directory: Desktop/cursovaia/library
+        run: docker-compose build --parallel
+
+      - name: 🚀 Deploy to Docker Swarm
+        working-directory: Desktop/cursovaia/library
+        run: |
+          # Initialize Swarm if not already
+          docker swarm init 2>/dev/null || true
+          
+          # Deploy stack
+          docker stack deploy -c docker-compose.swarm.yml library
+
+      - name: ⏳ Wait for services
+        run: sleep 20
+
+      - name: 📊 Check deployment status
+        working-directory: Desktop/cursovaia/library
+        run: |
+          echo "=== Services Status ==="
+          docker stack services library
+          
+          echo ""
+          echo "=== Running Tasks ==="
+          docker stack ps library --filter "desired-state=running"
+
+      - name: ✅ Verify deployment
+        run: |
+          # Wait for services to be ready
+          for i in {1..30}; do
+            if curl -f http://localhost/api/stats 2>/dev/null; then
+              echo "✅ Deployment successful!"
+              exit 0
+            fi
+            echo "Waiting for services... ($i/30)"
+            sleep 2
+          done
+          echo "❌ Deployment verification failed"
+          exit 1
+
+      - name: 📝 Deployment summary
+        if: always()
+        working-directory: Desktop/cursovaia/library
+        run: |
+          echo "=== Final Status ==="
+          docker stack services library
+          echo ""
+          echo "🌐 Application: http://localhost"

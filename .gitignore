@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+*.log
+.env
+mongodb_data/
+logs/
+actions-runner/

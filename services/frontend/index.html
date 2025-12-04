@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система Управления Электронной Библиотекой</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📚 Система Управления Электронной Библиотекой</h1>
+            <div class="stats" id="stats">
+                <div class="stat-card">
+                    <span class="stat-value" id="totalBooks">0</span>
+                    <span class="stat-label">Всего книг</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="availableBooks">0</span>
+                    <span class="stat-label">Доступно</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="borrowedBooks">0</span>
+                    <span class="stat-label">Выдано</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="categories">0</span>
+                    <span class="stat-label">Категорий</span>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <section class="controls">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Поиск по названию, автору или категории...">
+                    <button onclick="searchBooks()">🔍 Поиск</button>
+                    <button onclick="loadBooks()">🔄 Показать все</button>
+                </div>
+                <button class="btn-primary" onclick="showAddModal()">➕ Добавить книгу</button>
+            </section>
+
+            <section class="books-grid" id="booksGrid">
+                <!-- Книги будут добавлены динамически -->
+            </section>
+        </main>
+    </div>
+
+    <!-- Модальное окно для добавления/редактирования книги -->
+    <div id="bookModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modalTitle">Добавить книгу</h2>
+            <form id="bookForm" onsubmit="saveBook(event)">
+                <input type="hidden" id="bookId">
+                
+                <div class="form-group">
+                    <label for="title">Название книги *</label>
+                    <input type="text" id="title" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="author">Автор *</label>
+                    <input type="text" id="author" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="year">Год издания</label>
+                    <input type="number" id="year" min="1000" max="2100">
+                </div>
+
+                <div class="form-group">
+                    <label for="isbn">ISBN</label>
+                    <input type="text" id="isbn">
+                </div>
+
+                <div class="form-group">
+                    <label for="category">Категория</label>
+                    <input type="text" id="category">
+                </div>
+
+                <div class="form-buttons">
+                    <button type="submit" class="btn-primary">Сохранить</button>
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js?v=4"></script>
+</body>
+</html>
