@@ -1,5 +1,8 @@
 FROM nginx:alpine
 
+# Устанавливаем curl для healthcheck
+RUN apk add --no-cache curl
+
 # Копируем конфигурацию load balancer
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
