@@ -96,11 +96,15 @@ jobs:
       - name: 🚀 Start services with Docker Compose
         run: |
           docker compose up -d
-          sleep 15
+          sleep 30
 
       - name: 🔍 Check services health
         run: |
           docker compose ps
+          echo "=== Backend logs ==="
+          docker compose logs backend | tail -20
+          echo "=== Frontend logs ==="
+          docker compose logs frontend | tail -20
           
       - name: 🧪 Test API endpoints
         run: |
