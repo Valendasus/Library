@@ -108,14 +108,14 @@ jobs:
           
       - name: 🧪 Test API endpoints
         run: |
-          # Test health
-          curl -f http://localhost/api/stats || exit 1
+          # Test health (direct to backend on port 3000)
+          curl -f http://localhost:3000/api/stats || exit 1
           
           # Test get books
-          curl -f http://localhost/api/books || exit 1
+          curl -f http://localhost:3000/api/books || exit 1
           
           # Test add book
-          curl -f -X POST http://localhost/api/books \
+          curl -f -X POST http://localhost:3000/api/books \
             -H "Content-Type: application/json" \
             -d '{"title":"Test Book","author":"CI/CD","year":2025,"category":"Test"}' || exit 1
           
