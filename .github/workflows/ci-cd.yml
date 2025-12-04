@@ -95,12 +95,12 @@ jobs:
 
       - name: 🚀 Start services with Docker Compose
         run: |
-          docker-compose up -d
+          docker compose up -d
           sleep 15
 
       - name: 🔍 Check services health
         run: |
-          docker-compose ps
+          docker compose ps
           
       - name: 🧪 Test API endpoints
         run: |
@@ -119,7 +119,7 @@ jobs:
 
       - name: 🧹 Cleanup
         if: always()
-        run: docker-compose down -v
+        run: docker compose down -v
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # 4️⃣  Локальный деплой (self-hosted runner)
@@ -137,11 +137,11 @@ jobs:
       - name: 🛑 Stop existing deployment
         run: |
           docker stack rm library 2>/dev/null || true
-          docker-compose down 2>/dev/null || true
+          docker compose down 2>/dev/null || true
           sleep 10
 
       - name: 🔨 Build images locally
-        run: docker-compose build --parallel
+        run: docker compose build --parallel
 
       - name: 🚀 Deploy to Docker Swarm
         run: |
