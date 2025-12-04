@@ -229,8 +229,8 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Статистика
-app.get('/api/stats', async (req, res) => {
+// Статистика (с кешированием)
+app.get('/api/stats', cacheMiddleware('books:stats', 30), async (req, res) => {
   try {
     const total = await Book.countDocuments();
     const available = await Book.countDocuments({ status: 'available' });

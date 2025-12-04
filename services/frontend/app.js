@@ -30,7 +30,7 @@ async function loadBooks() {
         loadStats();
     } catch (error) {
         console.error('Ошибка загрузки книг:', error);
-        showError('Не удалось загрузить книги. Проверьте, что сервер запущен.');
+        showToast('Не удалось загрузить книги. Проверьте, что сервер запущен.', 'error');
     }
 }
 
